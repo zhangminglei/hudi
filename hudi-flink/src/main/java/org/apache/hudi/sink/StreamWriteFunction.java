@@ -260,7 +260,7 @@ public class StreamWriteFunction<I, O>
   @Override
   public void close() {
     if (this.writeClient != null) {
-      this.writeClient.cleanHandles();
+      this.writeClient.cleanHandlesGracefully();
       this.writeClient.close();
     }
   }
@@ -268,6 +268,7 @@ public class StreamWriteFunction<I, O>
   @Override
   public void notifyCheckpointComplete(long checkpointId) {
     this.confirming = false;
+    this.writeClient.cleanHandles();
   }
 
   /**
@@ -519,16 +520,14 @@ public class StreamWriteFunction<I, O>
       return false;
     }
 
-    // if we are waiting for the checkpoint notification, shift the write instant time.
-    boolean shift = confirming && StreamerUtil.equal(instant, this.currentInstant);
-    final String flushInstant = shift ? StreamerUtil.instantTimePlus(instant, 1) : instant;
-
     List<HoodieRecord> records = bucket.records;
     ValidationUtils.checkState(records.size() > 0, "Data bucket to flush has no buffering records");
     if (config.getBoolean(FlinkOptions.INSERT_DROP_DUPS)) {
       records = FlinkWriteHelper.newInstance().deduplicateRecords(records, (HoodieIndex) null, -1);
     }
-    final List<WriteStatus> writeStatus = new ArrayList<>(writeFunction.apply(records, flushInstant));
+
+    final List<WriteStatus> writeStatus = new ArrayList<>(writeFunction.apply(records, instant));
+    records.clear();
     final BatchWriteSuccessEvent event = BatchWriteSuccessEvent.builder()
         .taskID(taskID)
         .instantTime(instant) // the write instant may shift but the event still use the currentInstant.
