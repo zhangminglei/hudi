@@ -183,13 +183,18 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
     // We need to stop queueing if queue-reader has failed and exited.
     throwExceptionIfFailed();
 
-    rateLimiter.acquire();
-    // We are retrieving insert value in the record queueing thread to offload computation
-    // around schema validation
-    // and record creation to it.
-    final O payload = transformFunction.apply(t);
-    adjustBufferSizeIfNeeded(payload);
-    queue.put(Option.of(payload));
+    if (memoryLimit > 0) {
+      rateLimiter.acquire();
+      // We are retrieving insert value in the record queueing thread to offload computation
+      // around schema validation
+      // and record creation to it.
+      final O payload = transformFunction.apply(t);
+      adjustBufferSizeIfNeeded(payload);
+      queue.put(Option.of(payload));
+    } else {
+      final O payload = transformFunction.apply(t);
+      queue.put(Option.of(payload));
+    }
   }
 
   /**
@@ -208,7 +213,9 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
       return Option.empty();
     }
 
-    rateLimiter.release();
+    if (memoryLimit > 0) {
+      rateLimiter.release();
+    }
     Option<O> newRecord = Option.empty();
     while (expectMoreRecords()) {
       try {
@@ -255,7 +262,9 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
     this.hasFailed.set(e);
     // release the permits so that if the queueing thread is waiting for permits then it will
     // get it.
-    this.rateLimiter.release(RECORD_CACHING_LIMIT + 1);
+    if (memoryLimit > 0) {
+      this.rateLimiter.release(RECORD_CACHING_LIMIT + 1);
+    }
   }
 
   @Override

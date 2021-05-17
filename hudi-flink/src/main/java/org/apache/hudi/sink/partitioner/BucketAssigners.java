@@ -45,10 +45,11 @@ public abstract class BucketAssigners {
       int taskID,
       int numTasks,
       boolean isOverwrite,
+      boolean ignoreSmallFiles,
       HoodieTableType tableType,
       HoodieFlinkEngineContext context,
       HoodieWriteConfig config) {
-    if (isOverwrite) {
+    if (isOverwrite || ignoreSmallFiles) {
       return new OverwriteBucketAssigner(taskID, numTasks, context, config);
     }
     switch (tableType) {

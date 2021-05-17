@@ -195,6 +195,12 @@ public class FlinkOptions {
           + "key value, we will pick the one with the largest value for the precombine field,\n"
           + "determined by Object.compareTo(..)");
 
+  public static final ConfigOption<Boolean> IGNORE_SMALL_FILES = ConfigOptions
+      .key("write.ignore.small.files")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Flag to ignore the small files in BucketAssignFunction.");
+
   public static final ConfigOption<String> PAYLOAD_CLASS = ConfigOptions
       .key("write.payload.class")
       .stringType()

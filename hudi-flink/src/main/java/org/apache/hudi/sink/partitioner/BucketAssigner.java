@@ -184,6 +184,7 @@ public class BucketAssigner {
     // if we have anything more, create new insert buckets, like normal
     if (newFileAssignStates.containsKey(partitionPath)) {
       NewFileAssignState newFileAssignState = newFileAssignStates.get(partitionPath);
+      // TODO：如果不能assign，依然会往同一个fileId写入，后续修改
       if (newFileAssignState.canAssign()) {
         newFileAssignState.assign();
       }

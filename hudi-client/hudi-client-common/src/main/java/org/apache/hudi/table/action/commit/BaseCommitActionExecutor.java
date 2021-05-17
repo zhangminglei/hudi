@@ -74,7 +74,11 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
     this.taskContextSupplier = context.getTaskContextSupplier();
     // TODO : Remove this once we refactor and move out autoCommit method from here, since the TxnManager is held in {@link AbstractHoodieWriteClient}.
     this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
-    this.lastCompletedTxn = TransactionUtils.getLastCompletedTxnInstantAndMetadata(table.getMetaClient());
+    try {
+      this.lastCompletedTxn = TransactionUtils.getLastCompletedTxnInstantAndMetadata(table.getMetaClient());
+    } catch (Exception e) {
+      LOG.error("Error in init BaseCommitActionExecutor.", e);
+    }
   }
 
   public abstract HoodieWriteMetadata<O> execute(I inputRecords);

@@ -110,6 +110,9 @@ public class FlinkStreamerConfig extends Configuration {
   @Parameter(names = {"--commit-on-errors"}, description = "Commit even when some records failed to be written.")
   public Boolean commitOnErrors = false;
 
+  @Parameter(names = {"--ignore-small-files"}, description = "Commit even when some records failed to be written.")
+  public Boolean ignoreSmallFiles = false;
+
   /**
    * Flink checkpoint interval.
    */
