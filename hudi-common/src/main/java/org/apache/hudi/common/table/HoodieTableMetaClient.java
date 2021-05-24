@@ -19,11 +19,7 @@
 package org.apache.hudi.common.table;
 
 import org.apache.hudi.common.config.SerializableConfiguration;
-import org.apache.hudi.common.fs.ConsistencyGuardConfig;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.fs.FailSafeConsistencyGuard;
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
-import org.apache.hudi.common.fs.NoOpConsistencyGuard;
+import org.apache.hudi.common.fs.*;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -246,15 +242,12 @@ public class HoodieTableMetaClient implements Serializable {
    * Get the FS implementation for this table.
    */
   public HoodieWrapperFileSystem getFs() {
-    if (fs == null) {
       FileSystem fileSystem = FSUtils.getFs(metaPath, hadoopConf.newCopy());
       ValidationUtils.checkArgument(!(fileSystem instanceof HoodieWrapperFileSystem),
           "File System not expected to be that of HoodieWrapperFileSystem");
-      fs = new HoodieWrapperFileSystem(fileSystem,
-          consistencyGuardConfig.isConsistencyCheckEnabled()
+      fs = HoodieWrapperFileSystemUtils.getHoodieWrapperFileSystem(fileSystem, consistencyGuardConfig.isConsistencyCheckEnabled()
               ? new FailSafeConsistencyGuard(fileSystem, consistencyGuardConfig)
               : new NoOpConsistencyGuard());
-    }
     return fs;
   }
 
