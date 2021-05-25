@@ -506,7 +506,7 @@ public class FlinkOptions {
     conf.setString(FlinkOptions.PARTITION_PATH_FIELD, config.partitionPathField);
     conf.setString(FlinkOptions.KEYGEN_CLASS, config.keygenClass);
     conf.setInteger(FlinkOptions.WRITE_TASKS, config.writeTaskNum);
-
+    conf.setBoolean(FlinkOptions.IGNORE_SMALL_FILES, config.ignoreSmallFiles);
     return conf;
   }
 
