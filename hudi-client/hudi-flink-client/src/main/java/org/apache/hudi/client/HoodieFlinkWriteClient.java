@@ -242,16 +242,6 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   @Override
   protected void preWrite(String instantTime, WriteOperationType writeOperationType, HoodieTableMetaClient metaClient) {
     setOperationType(writeOperationType);
-    this.lastCompletedTxnAndMetadata = TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient);
-    this.txnManager.beginTransaction(Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, metaClient.getCommitActionType(), instantTime)), lastCompletedTxnAndMetadata
-        .isPresent()
-        ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
-    try {
-      syncTableMetadata();
-    } finally {
-      this.txnManager.endTransaction();
-    }
-    // remove the async cleaning
   }
 
   /**
