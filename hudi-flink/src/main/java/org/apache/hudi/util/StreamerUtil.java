@@ -63,7 +63,12 @@ import javax.annotation.Nullable;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.StringReader;
-import java.util.*;
+import java.util.Properties;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 
 /**
  * Utilities for Flink stream read and write.
