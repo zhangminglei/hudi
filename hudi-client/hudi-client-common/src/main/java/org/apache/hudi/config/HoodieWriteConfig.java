@@ -162,6 +162,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       "hoodie.write.meta.key.prefixes";
   public static final String DEFAULT_WRITE_META_KEY_PREFIXES = "";
 
+  public static final String WRITE_IGNORE_SMALL_FILES_PROP =
+      "hoodie.write.ignore.small.files";
+  public static final String DEFAULT_WRITE_IGNORE_SMALL_FILES = "false";
+
   /**
    * HUDI-858 : There are users who had been directly using RDD APIs and have relied on a behavior in 0.4.x to allow
    * multiple write operations (upsert/buk-insert/...) to be executed within a single commit.
@@ -1385,6 +1389,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           WRITE_CONCURRENCY_MODE_PROP, DEFAULT_WRITE_CONCURRENCY_MODE);
       setDefaultOnCondition(props, !props.containsKey(WRITE_META_KEY_PREFIXES_PROP),
           WRITE_META_KEY_PREFIXES_PROP, DEFAULT_WRITE_META_KEY_PREFIXES);
+      setDefaultOnCondition(props, !props.containsKey(WRITE_IGNORE_SMALL_FILES_PROP),
+              WRITE_IGNORE_SMALL_FILES_PROP, DEFAULT_WRITE_IGNORE_SMALL_FILES);
       // Make sure the props is propagated
       setDefaultOnCondition(props, !isIndexConfigSet, HoodieIndexConfig.newBuilder().withEngineType(engineType).fromProperties(props).build());
       setDefaultOnCondition(props, !isStorageConfigSet, HoodieStorageConfig.newBuilder().fromProperties(props).build());
