@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.MarkerFiles;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,12 +46,12 @@ import java.util.List;
  * @param <K> Key type
  * @param <O> Output type
  */
-public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
-    extends HoodieAppendHandle<T, I, K, O> implements MiniBatchHandle {
+public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieAppendHandle<T, I, K, O> implements MiniBatchHandle {
 
   private static final Logger LOG = LoggerFactory.getLogger(FlinkAppendHandle.class);
-
-  private boolean shouldRollover = false;
+  private boolean needBootStrap = true;
+  // Total number of bytes written to file
+  private long sizeInBytes = 0;
 
   public FlinkAppendHandle(
       HoodieWriteConfig config,
@@ -63,17 +62,6 @@ public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
       Iterator<HoodieRecord<T>> recordItr,
       TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, hoodieTable, partitionPath, fileId, recordItr, taskContextSupplier);
-  }
-
-  @Override
-  protected void createMarkerFile(String partitionPath, String dataFileName) {
-    // In some rare cases, the task was pulled up again with same write file name,
-    // for e.g, reuse the small log files from last commit instant.
-
-    // Just skip the marker file creation if it already exists, the new data would append to
-    // the file directly.
-    MarkerFiles markerFiles = new MarkerFiles(hoodieTable, instantTime);
-    markerFiles.createIfNotExists(partitionPath, dataFileName, getIOType());
   }
 
   @Override
@@ -92,8 +80,12 @@ public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
     return true;
   }
 
-  public boolean shouldRollover() {
-    return this.shouldRollover;
+  /**
+   * Returns whether there is need to bootstrap this file handle.
+   * E.G. the first time that the handle is created.
+   */
+  public boolean isNeedBootStrap() {
+    return this.needBootStrap;
   }
 
   /**
@@ -106,7 +98,7 @@ public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
 
   @Override
   public List<WriteStatus> close() {
-    shouldRollover = true;
+    needBootStrap = false;
     // flush any remaining records to disk
     appendDataAndDeleteBlocks(header);
     // need to fix that the incremental write size in bytes may be lost
@@ -124,17 +116,6 @@ public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
       }
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to close append handle", e);
-    }
-  }
-
-  @Override
-  public void closeGracefully() {
-    try {
-      finishWrite();
-    } catch (Throwable throwable) {
-      // The intermediate log file can still append based on the incremental MERGE semantics,
-      // there is no need to delete the file.
-      LOG.warn("Error while trying to dispose the APPEND handle", throwable);
     }
   }
 }

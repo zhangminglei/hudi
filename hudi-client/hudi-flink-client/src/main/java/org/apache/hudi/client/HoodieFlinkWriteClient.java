@@ -369,19 +369,9 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
    * would close the underneath file handles.
    */
   public void cleanHandles() {
-    this.bucketToHandles.values()
-        .forEach(handle -> ((MiniBatchHandle) handle).finishWrite());
-    this.bucketToHandles.clear();
-  }
-
-  /**
-   * Clean the write handles within a checkpoint interval, this operation
-   * would close the underneath file handles, if any error happens, clean the
-   * corrupted data file.
-   */
-  public void cleanHandlesGracefully() {
-    this.bucketToHandles.values()
-        .forEach(handle -> ((MiniBatchHandle) handle).closeGracefully());
+    this.bucketToHandles.values().forEach(handle -> {
+      ((MiniBatchHandle) handle).finishWrite();
+    });
     this.bucketToHandles.clear();
   }
 
@@ -435,6 +425,12 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
       writeTimer = metrics.getDeltaCommitCtx();
     }
     return table;
+  }
+
+  public List<String> getInflightsAndRequestedInstants(String commitType) {
+    HoodieTimeline unCompletedTimeline = getHoodieTable().getMetaClient().getCommitsTimeline().filterInflightsAndRequested();
+    return unCompletedTimeline.getInstants().filter(x -> x.getAction().equals(commitType)).map(HoodieInstant::getTimestamp)
+        .collect(Collectors.toList());
   }
 
   public String getLastPendingInstant(HoodieTableType tableType) {

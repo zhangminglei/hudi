@@ -22,24 +22,9 @@ package org.apache.hudi.io;
  * Hoodie write handle that supports write as mini-batch.
  */
 public interface MiniBatchHandle {
-
-  /**
-   * Returns whether the handle should roll over to new,
-   * E.G. the handle has written some intermediate data buffer already.
-   */
-  default boolean shouldRollover() {
-    return false;
-  }
-
   /**
    * Finish the write of multiple mini-batches. Usually these mini-bathes
-   * come from one checkpoint interval.
+   * come from a checkpoint interval.
    */
   void finishWrite();
-
-  /**
-   * Close the file handle gracefully, if any error happens during the file handle close,
-   * clean the file to not left corrupted file.
-   */
-  void closeGracefully();
 }
