@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink;
 
+import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -39,7 +40,6 @@ import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
-import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -92,8 +92,8 @@ import java.util.stream.Collectors;
  * @param <I> Type of the input record
  * @see StreamWriteOperatorCoordinator
  */
-public class StreamWriteFunction<K, I, O>
-    extends KeyedProcessFunction<K, I, O>
+public class StreamWriteFunction<I, O>
+    extends ProcessFunction<I, O>
     implements CheckpointedFunction, CheckpointListener {
 
   private static final long serialVersionUID = 1L;
@@ -193,7 +193,7 @@ public class StreamWriteFunction<K, I, O>
   }
 
   @Override
-  public void processElement(I value, KeyedProcessFunction<K, I, O>.Context ctx, Collector<O> out) {
+  public void processElement(I value, ProcessFunction<I, O>.Context ctx, Collector<O> out) {
     bufferRecord(value);
   }
 
