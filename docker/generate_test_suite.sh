@@ -23,7 +23,7 @@ INCLUDE_CLUSTER_YAML=false
 CLUSTER_NUM_ITR=2
 CLUSTER_DELAY_MINS=1
 CLUSTER_ITR_COUNT=1
-JAR_NAME=hudi-integ-test-bundle-0.9.0-jihe-SNAPSHOT.jar
+JAR_NAME=hudi-integ-test-bundle-0.9.0-bilibili-SNAPSHOT.jar
 INPUT_PATH="/user/hive/warehouse/hudi-integ-test-suite/input/"
 OUTPUT_PATH="/user/hive/warehouse/hudi-integ-test-suite/output/"
 
