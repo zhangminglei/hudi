@@ -233,6 +233,11 @@ public class StreamWriteFunction<I, O>
   }
 
   @VisibleForTesting
+  public boolean isConfirming() {
+    return confirming;
+  }
+
+  @VisibleForTesting
   @SuppressWarnings("rawtypes")
   public HoodieFlinkWriteClient getWriteClient() {
     return writeClient;
