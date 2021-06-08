@@ -82,11 +82,8 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
       }
 
       DataStream<Object> pipeline = hoodieDataStream
-           .transform("index_bootstrap",
-                  TypeInformation.of(BootstrapRecord.class),
-                  new ProcessOperator<>(new BootstrapFunction<>(conf)))
           // Key-by record key, to avoid multiple subtasks write to a bucket at the same time
-          .keyBy(BootstrapRecord::getRecordKey)
+          .keyBy(HoodieRecord::getRecordKey)
           .transform(
               "bucket_assigner",
               TypeInformation.of(HoodieRecord.class),
