@@ -131,7 +131,7 @@ public class TestStreamWriteOperatorCoordinator {
 
   @Test
   public void testTableInitialized() throws IOException {
-    final org.apache.hadoop.conf.Configuration hadoopConf = StreamerUtil.getHadoopConf();
+    final org.apache.hadoop.conf.Configuration hadoopConf = StreamerUtil.getHadoopConf(null);
     String basePath = tempFile.getAbsolutePath();
     try (FileSystem fs = FSUtils.getFs(basePath, hadoopConf)) {
       assertTrue(fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME)));

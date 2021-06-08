@@ -163,7 +163,7 @@ public class MergeOnReadInputFormat
   @Override
   public void open(MergeOnReadInputSplit split) throws IOException {
     this.currentReadCount = 0L;
-    this.hadoopConf = StreamerUtil.getHadoopConf();
+    this.hadoopConf = StreamerUtil.getHadoopConf(conf.getString(FlinkOptions.HADOOP_CONF_DIR));
     if (!(split.getLogPaths().isPresent() && split.getLogPaths().get().size() > 0)) {
       if (conf.getBoolean(FlinkOptions.READ_AS_STREAMING)) {
         // base file only with commit time filtering

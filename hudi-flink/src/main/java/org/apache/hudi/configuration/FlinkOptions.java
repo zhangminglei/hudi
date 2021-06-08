@@ -69,6 +69,12 @@ public class FlinkOptions {
       .withDescription("The default partition name in case the dynamic partition"
           + " column value is null/empty string");
 
+  public static final ConfigOption<String> HADOOP_CONF_DIR = ConfigOptions
+          .key("hadoop.conf.dir")
+          .stringType()
+          .defaultValue("") // default empty
+          .withDescription("user defined hadoop conf dir");
+
   // ------------------------------------------------------------------------
   //  Index Options
   // ------------------------------------------------------------------------

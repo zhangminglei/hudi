@@ -63,7 +63,7 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
     fs = FSUtils.getFs(tempFile.getAbsolutePath(), new org.apache.hadoop.conf.Configuration());
     writeConfig = StreamerUtil.getHoodieClientConfig(conf);
     context = new HoodieFlinkEngineContext(
-        new SerializableConfiguration(StreamerUtil.getHadoopConf()),
+        new SerializableConfiguration(StreamerUtil.getHadoopConf(null)),
         new FlinkTaskContextSupplier(null));
   }
 

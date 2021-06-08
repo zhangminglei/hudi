@@ -18,6 +18,7 @@
 
 package org.apache.hudi.util;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
@@ -81,7 +82,7 @@ public class StreamerUtil {
       return new TypedProperties();
     }
     return readConfig(
-        FSUtils.getFs(cfg.propsFilePath, getHadoopConf()),
+        FSUtils.getFs(cfg.propsFilePath, getHadoopConf(cfg.hadoopConfDir)),
         new Path(cfg.propsFilePath), cfg.configs).getConfig();
   }
 
@@ -128,8 +129,26 @@ public class StreamerUtil {
   }
 
   // Keep to avoid to much modifications.
-  public static org.apache.hadoop.conf.Configuration getHadoopConf() {
+  private static org.apache.hadoop.conf.Configuration getHadoopConf() {
     return FlinkClientUtil.getHadoopConf();
+  }
+
+  public static org.apache.hadoop.conf.Configuration getHadoopConf(String resourceList){
+
+    if(StringUtils.isEmpty(resourceList)){
+      return getHadoopConf();
+    }
+
+    org.apache.hadoop.conf.Configuration conf = FlinkClientUtil.getHadoopConf();
+    try {
+      for(String resource:resourceList.split(",")){
+        conf.addResource(new Path(resource));
+        LOG.info("add resource success, resource:{}",resource);
+      }
+    }catch (Exception e){
+      LOG.error("add resource failed,resourceList:{}",resourceList);
+    }
+    return conf;
   }
 
   public static HoodieWriteConfig getHoodieClientConfig(Configuration conf) {
@@ -205,7 +224,7 @@ public class StreamerUtil {
    */
   public static void initTableIfNotExists(Configuration conf) throws IOException {
     final String basePath = conf.getString(FlinkOptions.PATH);
-    final org.apache.hadoop.conf.Configuration hadoopConf = StreamerUtil.getHadoopConf();
+    final org.apache.hadoop.conf.Configuration hadoopConf = StreamerUtil.getHadoopConf(conf.getString(FlinkOptions.HADOOP_CONF_DIR));
     // Hadoop FileSystem
     FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
     if (!fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))) {
@@ -271,7 +290,7 @@ public class StreamerUtil {
   public static HoodieFlinkWriteClient createWriteClient(Configuration conf, RuntimeContext runtimeContext) {
     HoodieFlinkEngineContext context =
         new HoodieFlinkEngineContext(
-            new SerializableConfiguration(getHadoopConf()),
+            new SerializableConfiguration(getHadoopConf(conf.getString(FlinkOptions.HADOOP_CONF_DIR))),
             new FlinkTaskContextSupplier(runtimeContext));
 
     return new HoodieFlinkWriteClient<>(context, getHoodieClientConfig(conf));

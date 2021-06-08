@@ -116,7 +116,7 @@ public class WriteProfile {
     this.smallFilesMap = new HashMap<>();
     this.recordsPerBucket = config.getCopyOnWriteInsertSplitSize();
     this.table = HoodieFlinkTable.create(config, context);
-    this.hadoopConf = StreamerUtil.getHadoopConf();
+    this.hadoopConf = context.getHadoopConf().get();
     this.metadataCache = new HashMap<>();
     // profile the record statistics on construction
     recordProfile();

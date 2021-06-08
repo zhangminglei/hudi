@@ -358,4 +358,7 @@ public class FlinkStreamerConfig extends Configuration {
     conf.setBoolean(FlinkOptions.HIVE_SYNC_SUPPORT_TIMESTAMP, config.hiveSyncSupportTimestamp);
     return conf;
   }
+
+  @Parameter(names = {"--hadoop-conf-dir"}, description = "user defined hadoop conf dir.")
+  public String hadoopConfDir = "";
 }
