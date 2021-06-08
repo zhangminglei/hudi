@@ -114,7 +114,7 @@ public class BootstrapFunction<I, O extends HoodieRecord>
   @Override
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
-    this.hadoopConf = StreamerUtil.getHadoopConf();
+    this.hadoopConf = StreamerUtil.getHadoopConf(conf.getString(FlinkOptions.HADOOP_CONF_DIR));
     this.hoodieTable = getTable();
     this.aggregateManager = ((StreamingRuntimeContext) getRuntimeContext()).getGlobalAggregateManager();
   }

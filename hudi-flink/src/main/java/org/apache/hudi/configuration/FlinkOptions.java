@@ -71,6 +71,12 @@ public class FlinkOptions {
       .withDescription("The default partition name in case the dynamic partition"
           + " column value is null/empty string");
 
+  public static final ConfigOption<String> HADOOP_CONF_DIR = ConfigOptions
+          .key("hadoop.conf.dir")
+          .stringType()
+          .defaultValue("") // default empty
+          .withDescription("user defined hadoop conf dir");
+
   // ------------------------------------------------------------------------
   //  Index Options
   // ------------------------------------------------------------------------
@@ -520,6 +526,7 @@ public class FlinkOptions {
     conf.setString(FlinkOptions.KEYGEN_CLASS, config.keygenClass);
     conf.setInteger(FlinkOptions.WRITE_TASKS, config.writeTaskNum);
     conf.setBoolean(FlinkOptions.IGNORE_SMALL_FILES, config.ignoreSmallFiles);
+    conf.setString(FlinkOptions.HADOOP_CONF_DIR,config.hadoopConfDir);
     return conf;
   }
 

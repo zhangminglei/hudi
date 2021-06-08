@@ -117,7 +117,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
     HoodieWriteConfig writeConfig = StreamerUtil.getHoodieClientConfig(this.conf);
-    this.hadoopConf = StreamerUtil.getHadoopConf();
+    this.hadoopConf = StreamerUtil.getHadoopConf(conf.getString(FlinkOptions.HADOOP_CONF_DIR));
     this.context = new HoodieFlinkEngineContext(
         new SerializableConfiguration(this.hadoopConf),
         new FlinkTaskContextSupplier(getRuntimeContext()));
