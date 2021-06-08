@@ -457,6 +457,11 @@ public class StreamWriteOperatorCoordinator
   }
 
   @VisibleForTesting
+  public InitWriterEvent[] getInitBuffer() {
+    return initEventBuffer;
+  }
+
+  @VisibleForTesting
   public String getInstant() {
     return instant;
   }

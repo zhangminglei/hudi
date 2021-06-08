@@ -28,6 +28,7 @@ import org.apache.hudi.sink.bootstrap.BootstrapRecord;
 import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.event.BatchWriteSuccessEvent;
+import org.apache.hudi.sink.event.InitWriterEvent;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunction;
 import org.apache.hudi.utils.TestConfigurations;
@@ -120,6 +121,7 @@ public class StreamWriteFunctionWrapper<I> {
     writeFunction = new StreamWriteFunction<>(conf);
     writeFunction.setRuntimeContext(runtimeContext);
     writeFunction.setOperatorEventGateway(gateway);
+    writeFunction.initializeState(this.functionInitializationContext);
     writeFunction.open(conf);
 
     if (conf.getBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED)) {
@@ -171,6 +173,10 @@ public class StreamWriteFunctionWrapper<I> {
 
   public BatchWriteSuccessEvent[] getEventBuffer() {
     return this.coordinator.getEventBuffer();
+  }
+
+  public InitWriterEvent[] getInitBuffer() {
+    return this.coordinator.getInitBuffer();
   }
 
   public OperatorEvent getNextEvent() {

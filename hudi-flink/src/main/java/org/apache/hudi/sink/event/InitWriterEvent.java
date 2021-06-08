@@ -75,7 +75,6 @@ public class InitWriterEvent implements OperatorEvent {
 
         public InitWriterEvent build() {
             Objects.requireNonNull(taskID);
-            Objects.requireNonNull(instant);
             Objects.requireNonNull(writeStatuses);
             return new InitWriterEvent(taskID, instant, writeStatuses);
         }
