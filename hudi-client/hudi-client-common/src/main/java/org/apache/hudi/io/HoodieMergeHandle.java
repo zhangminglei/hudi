@@ -340,6 +340,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
 
       if (fileWriter != null) {
         fileWriter.close();
+        fileWriter = null;
       }
 
       long fileSizeInBytes = FSUtils.getFileSize(fs, newFilePath);
