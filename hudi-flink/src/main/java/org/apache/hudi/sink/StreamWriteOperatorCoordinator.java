@@ -214,11 +214,12 @@ public class StreamWriteOperatorCoordinator
             startInstant();
 
             sendEventToWriter(context, true);
+
+            // sync Hive if is enabled
+            syncHiveIfEnabled();
           }
         }, "commits the instant %s", this.instant
     );
-    // sync Hive if is enabled
-    syncHiveIfEnabled();
   }
 
   @Override
