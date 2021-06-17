@@ -18,29 +18,17 @@
 
 package org.apache.hudi.sink;
 
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.common.config.SerializableConfiguration;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.event.BatchWriteSuccessEvent;
 import org.apache.hudi.sink.event.InitWriterEvent;
 import org.apache.hudi.sink.utils.StreamWriteFunctionWrapper;
-import org.apache.hudi.table.HoodieFlinkTable;
-import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
@@ -641,25 +629,6 @@ public class TestWriteCopyOnWrite {
       }
     }, "Timeout(500ms) while waiting for instant");
   }
-
-  protected void checkWrittenDataMOR(File baseFile, Map<String, String> expected, int partitions) throws Exception {
-    FileSystem fs = FSUtils.getFs(tempFile.getAbsolutePath(), new org.apache.hadoop.conf.Configuration());
-    HoodieFlinkEngineContext context = new HoodieFlinkEngineContext(
-            new SerializableConfiguration(StreamerUtil.getHadoopConf(null)),
-            new FlinkTaskContextSupplier(null));
-    HoodieWriteConfig writeConfig = StreamerUtil.getHoodieClientConfig(conf);
-    HoodieTableMetaClient metaClient = HoodieFlinkTable.create(writeConfig, context).getMetaClient();
-    Schema schema = new TableSchemaResolver(metaClient).getTableAvroSchema();
-    String latestInstant = metaClient.getCommitsTimeline().filterCompletedInstants()
-            .getInstants()
-            .filter(x -> x.getAction().equals(HoodieActiveTimeline.DELTA_COMMIT_ACTION))
-            .map(HoodieInstant::getTimestamp)
-            .collect(Collectors.toList()).stream()
-            .max(Comparator.naturalOrder())
-            .orElse(null);
-    TestData.checkWrittenDataMOR(fs, latestInstant, baseFile, expected, partitions, schema);
-  }
-
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
@@ -690,7 +659,7 @@ public class TestWriteCopyOnWrite {
   }
 
   protected HoodieTableType getTableType() {
-    return HoodieTableType.MERGE_ON_READ;
+    return HoodieTableType.COPY_ON_WRITE;
   }
 
   protected void checkWrittenData(File baseFile, Map<String, String> expected) throws Exception {
