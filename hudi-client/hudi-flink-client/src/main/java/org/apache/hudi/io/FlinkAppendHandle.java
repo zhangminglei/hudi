@@ -26,6 +26,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.table.MarkerFiles;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,6 +58,17 @@ public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O> extends H
       Iterator<HoodieRecord<T>> recordItr,
       TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, hoodieTable, partitionPath, fileId, recordItr, taskContextSupplier);
+  }
+
+  @Override
+  protected void createMarkerFile(String partitionPath, String dataFileName) {
+    // In some rare cases, the task was pulled up again with same write file name,
+    // for e.g, reuse the small log files from last commit instant.
+
+    // Just skip the marker file creation if it already exists, the new data would append to
+    // the file directly.
+    MarkerFiles markerFiles = new MarkerFiles(hoodieTable, instantTime);
+    markerFiles.createIfNotExists(partitionPath, dataFileName, getIOType());
   }
 
   @Override

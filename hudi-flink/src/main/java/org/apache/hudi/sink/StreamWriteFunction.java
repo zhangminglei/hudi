@@ -568,7 +568,7 @@ public class StreamWriteFunction<I, O>
     this.currentInstant = this.writeClient.getLastPendingInstant(this.actionType);
 
     if (this.currentInstant == null) {
-      throw new HoodieException("No inflight instant when flushing data!");
+      waitForNewInstant();
     }
 
     final List<WriteStatus> writeStatus;
@@ -584,6 +584,8 @@ public class StreamWriteFunction<I, O>
                 records = FlinkWriteHelper.newInstance().deduplicateRecords(records, (HoodieIndex) null, -1);
               }
               writeStatus.addAll(writeFunction.apply(records, currentInstant));
+              records.clear();
+              bucket.reset();
             }
           });
     } else {

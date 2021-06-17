@@ -50,6 +50,7 @@ public class EmbeddedTimelineServerHelper {
       if (!TIMELINE_SERVER.isPresent() || !TIMELINE_SERVER.get().canReuseFor(config.getBasePath())) {
         TIMELINE_SERVER = Option.of(startTimelineService(context, config));
       }
+      updateWriteConfigWithTimelineServer(TIMELINE_SERVER.get(), config);
       return TIMELINE_SERVER;
     }
     if (config.isEmbeddedTimelineServerEnabled()) {
@@ -70,7 +71,6 @@ public class EmbeddedTimelineServerHelper {
         config.getEmbeddedTimelineServerThreads(), config.getEmbeddedTimelineServerCompressOutput(),
         config.getEmbeddedTimelineServerUseAsync());
     timelineService.startServer();
-    updateWriteConfigWithTimelineServer(timelineService, config);
     return timelineService;
   }
 
