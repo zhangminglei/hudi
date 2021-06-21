@@ -39,6 +39,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -120,11 +121,13 @@ public class WriteProfiles {
           try {
             return fs.getFileStatus(path);
           } catch (IOException e) {
-            LOG.error("Get write status of path: {} error", path);
-            throw new HoodieException(e);
+            // if this file be deleted, this file must not the latest version, skip
+            LOG.error("Get write status of path: {}, skip.", path);
+            return null;
           }
         })
         // filter out crushed files
+        .filter(Objects::nonNull)
         .filter(fileStatus -> fileStatus.getLen() > 0)
         .collect(Collectors.toList());
   }
