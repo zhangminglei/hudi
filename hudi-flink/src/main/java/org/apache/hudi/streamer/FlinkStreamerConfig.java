@@ -124,4 +124,7 @@ public class FlinkStreamerConfig extends Configuration {
 
   @Parameter(names = {"--write-task-num"}, description = "Parallelism of tasks that do actual write, default is 4.")
   public Integer writeTaskNum = 4;
+
+  @Parameter(names = {"--hadoop-conf-dir"}, description = "user defined hadoop conf dir.")
+  public String hadoopConfDir = "";
 }

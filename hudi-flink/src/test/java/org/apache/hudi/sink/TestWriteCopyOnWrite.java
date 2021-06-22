@@ -25,7 +25,9 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.event.BatchWriteSuccessEvent;
+import org.apache.hudi.sink.event.InitWriterEvent;
 import org.apache.hudi.sink.utils.StreamWriteFunctionWrapper;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
@@ -49,10 +51,7 @@ import java.util.stream.Collectors;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Test cases for stream write.
@@ -500,9 +499,8 @@ public class TestWriteCopyOnWrite {
 
   Map<String, String> getMiniBatchExpected() {
     Map<String, String> expected = new HashMap<>();
-    expected.put("par1", "[id1,par1,id1,Danny,23,1,par1, "
-        + "id1,par1,id1,Danny,23,1,par1, "
-        + "id1,par1,id1,Danny,23,1,par1, "
+    // the last 3 lines are merged
+    expected.put("par1", "["
         + "id1,par1,id1,Danny,23,1,par1, "
         + "id1,par1,id1,Danny,23,1,par1]");
     return expected;
@@ -510,10 +508,6 @@ public class TestWriteCopyOnWrite {
 
   @Test
   public void testIndexStateBootstrap() throws Exception {
-    // reset the config option
-    conf.setBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
-    funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
-
     // open the function and ingest data
     funcWrapper.openFunction();
     for (RowData rowData : TestData.DATA_SET_INSERT) {
@@ -532,13 +526,21 @@ public class TestWriteCopyOnWrite {
 
     funcWrapper.checkpointComplete(1);
 
-    // Mark the index state as not fully loaded to trigger re-load from the filesystem.
-    funcWrapper.clearIndexState();
+    // the data is not flushed yet
+    checkWrittenData(tempFile, EXPECTED1);
+
+    // reset the config option
+    conf.setBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+    funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
 
     // upsert another data buffer
+    funcWrapper.openFunction();
     for (RowData rowData : TestData.DATA_SET_UPDATE_INSERT) {
       funcWrapper.invoke(rowData);
     }
+
+    assertTrue(funcWrapper.isAlreadyBootstrap());
+
     checkIndexLoaded(
         new HoodieKey("id1", "par1"),
         new HoodieKey("id2", "par1"),
@@ -547,11 +549,13 @@ public class TestWriteCopyOnWrite {
         new HoodieKey("id5", "par3"),
         new HoodieKey("id6", "par3"),
         new HoodieKey("id7", "par4"),
-        new HoodieKey("id8", "par4"));
-    // the data is not flushed yet
-    checkWrittenData(tempFile, EXPECTED1);
+        new HoodieKey("id8", "par4"),
+        new HoodieKey("id9", "par3"),
+        new HoodieKey("id10", "par4"),
+        new HoodieKey("id11", "par4"));
+
     // this triggers the data write and event send
-    funcWrapper.checkpointFunction(2);
+    funcWrapper.checkpointFunction(1);
 
     String instant = funcWrapper.getWriteClient()
         .getLastPendingInstant(getTableType());
@@ -565,12 +569,66 @@ public class TestWriteCopyOnWrite {
 
     checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.REQUESTED, instant);
 
-    funcWrapper.checkpointComplete(2);
+    funcWrapper.checkpointComplete(1);
     // the coordinator checkpoint commits the inflight instant.
     checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, instant);
     checkWrittenData(tempFile, EXPECTED2);
   }
 
+  @Test
+  public void testWriteExactlyOnce() throws Exception {
+    // reset the config option
+    conf.setBoolean(FlinkOptions.WRITE_EXACTLY_ONCE_ENABLED, true);
+    conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 3);
+    conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.0006); // 630 bytes buffer size
+    funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
+
+    // open the function and ingest data
+
+    funcWrapper.openFunction();
+    for (RowData rowData : TestData.DATA_SET_INSERT) {
+      funcWrapper.invoke(rowData);
+    }
+
+    // no checkpoint, so the coordinator does not accept any events
+    assertTrue(
+            funcWrapper.getEventBuffer().length == 1
+                    && funcWrapper.getEventBuffer()[0] == null, "The coordinator events buffer expect to be empty");
+
+    OperatorEvent nextEvent = funcWrapper.getNextEvent();
+    assertThat("The operator expect to send an event", nextEvent, instanceOf(InitWriterEvent.class));
+
+    funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
+    assertNotNull(funcWrapper.getInitBuffer()[0], "The coordinator missed the event");
+
+    // this triggers the data write and event send
+    funcWrapper.checkpointFunction(1);
+    assertTrue(funcWrapper.isConforming(), "The write function should be waiting for the instant to commit");
+
+    for (int i = 0; i < 1; i++) {
+      final OperatorEvent event = funcWrapper.getNextEvent(); // remove the first event first
+      assertThat("The operator expect to send an event", event, instanceOf(BatchWriteSuccessEvent.class));
+      funcWrapper.getCoordinator().handleEventFromOperator(0, event);
+    }
+
+    funcWrapper.checkpointComplete(1);
+
+    for (RowData rowData : TestData.DATA_SET_INSERT) {
+      funcWrapper.invoke(rowData);
+    }
+
+    assertFalse(funcWrapper.isConforming(), "The write function should finish waiting for the instant to commit");
+
+    // checkpoint for the next round, when there is eager flush but the write
+    // task is waiting for the instant commit ack, should throw for timeout.
+    funcWrapper.checkpointFunction(2);
+
+    assertThrows(HoodieException.class, () -> {
+      for (RowData rowData : TestData.DATA_SET_INSERT) {
+        funcWrapper.invoke(rowData);
+      }
+    }, "Timeout(500ms) while waiting for instant");
+  }
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------

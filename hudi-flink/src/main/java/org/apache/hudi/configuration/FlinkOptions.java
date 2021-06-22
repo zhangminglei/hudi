@@ -18,6 +18,7 @@
 
 package org.apache.hudi.configuration;
 
+import com.sun.org.apache.xpath.internal.operations.Bool;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -71,6 +72,12 @@ public class FlinkOptions {
       .withDescription("The default partition name in case the dynamic partition"
           + " column value is null/empty string");
 
+  public static final ConfigOption<String> HADOOP_CONF_DIR = ConfigOptions
+          .key("hadoop.conf.dir")
+          .stringType()
+          .defaultValue("") // default empty
+          .withDescription("user defined hadoop conf dir");
+
   // ------------------------------------------------------------------------
   //  Index Options
   // ------------------------------------------------------------------------
@@ -85,6 +92,19 @@ public class FlinkOptions {
       .doubleType()
       .defaultValue(1.5D)
       .withDescription("Index state ttl in days, default 1.5 day");
+
+  public static final ConfigOption<Boolean> INDEX_GLOBAL_ENABLED = ConfigOptions
+      .key("index.global.enabled")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Whether to update index for the old partition path\n"
+          + "if same key record with different partition path came in, default false");
+
+  public static final ConfigOption<String> INDEX_PARTITION_REGEX = ConfigOptions
+      .key("index.partition.regex")
+      .stringType()
+      .defaultValue(".*")
+      .withDescription("Whether to load partitions in state if partition path matching， default *");
 
   // ------------------------------------------------------------------------
   //  Read Options
@@ -304,6 +324,22 @@ public class FlinkOptions {
       .defaultValue(100) // default 100 MB
       .withDescription("Max memory in MB for merge, default 100MB");
 
+  public static final ConfigOption<Boolean> WRITE_EXACTLY_ONCE_ENABLED = ConfigOptions
+          .key("write.exactly_once.enabled")
+          .booleanType()
+          .defaultValue(false) // default at least once
+          .withDescription("Whether write in exactly_once semantics, if true,\n"
+                  + "the write task would block flushing after it finishes a checkpoint\n"
+                  + "until it receives the checkpoint success event, default false");
+
+  // this is only for internal use
+  public static final ConfigOption<Long> WRITE_COMMIT_ACK_TIMEOUT = ConfigOptions
+          .key("write.commit.ack.timeout")
+          .longType()
+          .defaultValue(-1L) // default at least once
+          .withDescription("Timeout limit for a writer task after it finishes a checkpoint and\n"
+                  + "waits for the instant commit success, only for internal use");
+
   // ------------------------------------------------------------------------
   //  Compaction Options
   // ------------------------------------------------------------------------
@@ -507,6 +543,7 @@ public class FlinkOptions {
     conf.setString(FlinkOptions.KEYGEN_CLASS, config.keygenClass);
     conf.setInteger(FlinkOptions.WRITE_TASKS, config.writeTaskNum);
     conf.setBoolean(FlinkOptions.IGNORE_SMALL_FILES, config.ignoreSmallFiles);
+    conf.setString(FlinkOptions.HADOOP_CONF_DIR,config.hadoopConfDir);
     return conf;
   }
 

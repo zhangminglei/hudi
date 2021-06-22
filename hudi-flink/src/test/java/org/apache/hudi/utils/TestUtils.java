@@ -38,13 +38,13 @@ public class TestUtils {
 
   public static String getLatestCommit(String basePath) {
     final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(StreamerUtil.getHadoopConf()).setBasePath(basePath).build();
+        .setConf(StreamerUtil.getHadoopConf(null)).setBasePath(basePath).build();
     return metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants().lastInstant().get().getTimestamp();
   }
 
   public static String getFirstCommit(String basePath) {
     final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(StreamerUtil.getHadoopConf()).setBasePath(basePath).build();
+        .setConf(StreamerUtil.getHadoopConf(null)).setBasePath(basePath).build();
     return metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants().firstInstant().get().getTimestamp();
   }
 
@@ -58,7 +58,7 @@ public class TestUtils {
   public static StreamReadMonitoringFunction getMonitorFunc(Configuration conf) {
     final String basePath = conf.getString(FlinkOptions.PATH);
     final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(StreamerUtil.getHadoopConf()).setBasePath(basePath).build();
+        .setConf(StreamerUtil.getHadoopConf(null)).setBasePath(basePath).build();
     return new StreamReadMonitoringFunction(conf, new Path(basePath), metaClient, 1024 * 1024L);
   }
 }
