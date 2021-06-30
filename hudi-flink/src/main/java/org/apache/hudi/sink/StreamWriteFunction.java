@@ -20,6 +20,7 @@ package org.apache.hudi.sink;
 
 import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -182,6 +183,8 @@ public class StreamWriteFunction<I, O>
    */
   private static final ExecutorService executor = Executors.newSingleThreadExecutor();
 
+  private Watermark watermark;
+
   /**
    * Constructs a StreamingSinkFunction.
    *
@@ -255,6 +258,14 @@ public class StreamWriteFunction<I, O>
   @Override
   public void processElement(I value, ProcessFunction<I, O>.Context ctx, Collector<O> out) throws Exception {
     bufferRecord((HoodieRecord<?>) value);
+  }
+
+  /**
+   *  watermark in streamwritefunction : 1624464000000
+   */
+  public void processWatermark(Watermark mark) throws Exception {
+    LOG.info("watermark: " + mark.toString() + ", thread name " + Thread.currentThread().getName());
+    watermark = mark;
   }
 
   @Override
@@ -534,6 +545,7 @@ public class StreamWriteFunction<I, O>
         .writeStatus(writeStatus)
         .isLastBatch(false)
         .isEndInput(false)
+        .watermark(watermark)
         .build();
 
     writeStatusOfCurrentCkpt.addAll(writeStatus);
@@ -598,7 +610,10 @@ public class StreamWriteFunction<I, O>
         .writeStatus(writeStatus)
         .isLastBatch(true)
         .isEndInput(isEndInput)
+        .watermark(watermark)
         .build();
+
+    LOG.info("flush remaining thread name " + Thread.currentThread().getName() + ", watermark is " + event.getWatermark());
 
     writeStatusOfCurrentCkpt.addAll(writeStatus);
     this.eventGateway.sendEventToCoordinator(event);

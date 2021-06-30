@@ -27,6 +27,8 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.stream.Collectors;
@@ -37,6 +39,9 @@ import java.util.stream.Collectors;
  * <p>Use this context to create the {@link HiveSyncTool} for synchronization.
  */
 public class HiveSyncContext {
+
+  private static final Logger LOG = LoggerFactory.getLogger(HiveSyncContext.class);
+
   private final HiveSyncConfig syncConfig;
   private final HiveConf hiveConf;
   private final FileSystem fs;
@@ -58,6 +63,7 @@ public class HiveSyncContext {
     FileSystem fs = FSUtils.getFs(path, hadoopConf);
     HiveConf hiveConf = new HiveConf();
     hiveConf.addResource(fs.getConf());
+    LOG.info("hive conf: " + hiveConf.toString());
     return new HiveSyncContext(syncConfig, hiveConf, fs);
   }
 
@@ -84,6 +90,9 @@ public class HiveSyncContext {
     hiveSyncConfig.decodePartition = conf.getBoolean(FlinkOptions.PARTITION_PATH_URL_ENCODE);
     hiveSyncConfig.skipROSuffix = conf.getBoolean(FlinkOptions.HIVE_SYNC_SKIP_RO_SUFFIX);
     hiveSyncConfig.assumeDatePartitioning = conf.getBoolean(FlinkOptions.HIVE_SYNC_ASSUME_DATE_PARTITION);
+
+    hiveSyncConfig.odsTableDatabase = conf.getString(FlinkOptions.HIVE_ODS_DATABASE);
+    hiveSyncConfig.odsTableTableName = conf.getString(FlinkOptions.HIVE_ODS_TABLENAME);
     return hiveSyncConfig;
   }
 }

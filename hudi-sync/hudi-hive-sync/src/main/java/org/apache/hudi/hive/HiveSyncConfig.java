@@ -104,6 +104,12 @@ public class HiveSyncConfig implements Serializable {
   @Parameter(names = {"--decode-partition"}, description = "Decode the partition value if the partition has encoded during writing")
   public Boolean decodePartition = false;
 
+  @Parameter(names = {"--ods-table-database"}, description = "")
+  public String odsTableDatabase;
+
+  @Parameter(names = {"--ods-table-database"}, description = "")
+  public String odsTableTableName;
+
   public static HiveSyncConfig copy(HiveSyncConfig cfg) {
     HiveSyncConfig newConfig = new HiveSyncConfig();
     newConfig.basePath = cfg.basePath;
@@ -122,34 +128,39 @@ public class HiveSyncConfig implements Serializable {
     newConfig.decodePartition = cfg.decodePartition;
     newConfig.tableProperties = cfg.tableProperties;
     newConfig.serdeProperties = cfg.serdeProperties;
+
+    newConfig.odsTableDatabase = cfg.odsTableDatabase;
+    newConfig.odsTableTableName = cfg.odsTableTableName;
     return newConfig;
   }
 
   @Override
   public String toString() {
-    return "HiveSyncConfig{"
-      + "databaseName='" + databaseName + '\''
-      + ", tableName='" + tableName + '\''
-      + ", baseFileFormat='" + baseFileFormat + '\''
-      + ", hiveUser='" + hiveUser + '\''
-      + ", hivePass='" + hivePass + '\''
-      + ", jdbcUrl='" + jdbcUrl + '\''
-      + ", basePath='" + basePath + '\''
-      + ", partitionFields=" + partitionFields
-      + ", partitionValueExtractorClass='" + partitionValueExtractorClass + '\''
-      + ", assumeDatePartitioning=" + assumeDatePartitioning
-      + ", usePreApacheInputFormat=" + usePreApacheInputFormat
-      + ", useJdbc=" + useJdbc
-      + ", autoCreateDatabase=" + autoCreateDatabase
-      + ", ignoreExceptions=" + ignoreExceptions
-      + ", skipROSuffix=" + skipROSuffix
-      + ", useFileListingFromMetadata=" + useFileListingFromMetadata
-      + ", verifyMetadataFileListing=" + verifyMetadataFileListing
-      + ", tableProperties='" + tableProperties + '\''
-      + ", serdeProperties='" + serdeProperties + '\''
-      + ", help=" + help
-      + ", supportTimestamp=" + supportTimestamp
-      + ", decodePartition=" + decodePartition
-      + '}';
+  return "HiveSyncConfig{" +
+      "databaseName='" + databaseName + '\'' +
+      ", tableName='" + tableName + '\'' +
+      ", baseFileFormat='" + baseFileFormat + '\'' +
+      ", hiveUser='" + hiveUser + '\'' +
+      ", hivePass='" + hivePass + '\'' +
+      ", jdbcUrl='" + jdbcUrl + '\'' +
+      ", basePath='" + basePath + '\'' +
+      ", partitionFields=" + partitionFields +
+      ", partitionValueExtractorClass='" + partitionValueExtractorClass + '\'' +
+      ", assumeDatePartitioning=" + assumeDatePartitioning +
+      ", usePreApacheInputFormat=" + usePreApacheInputFormat +
+      ", useJdbc=" + useJdbc +
+      ", autoCreateDatabase=" + autoCreateDatabase +
+      ", ignoreExceptions=" + ignoreExceptions +
+      ", skipROSuffix=" + skipROSuffix +
+      ", useFileListingFromMetadata=" + useFileListingFromMetadata +
+      ", verifyMetadataFileListing=" + verifyMetadataFileListing +
+      ", tableProperties='" + tableProperties + '\'' +
+      ", serdeProperties='" + serdeProperties + '\'' +
+      ", help=" + help +
+      ", supportTimestamp=" + supportTimestamp +
+      ", decodePartition=" + decodePartition +
+      ", odsTableDatabase='" + odsTableDatabase + '\'' +
+      ", odsTableTableName='" + odsTableTableName + '\'' +
+      '}';
   }
 }

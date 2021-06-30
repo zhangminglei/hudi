@@ -25,6 +25,7 @@ import org.apache.flink.runtime.operators.coordination.OperatorEventHandler;
 import org.apache.flink.streaming.api.operators.BoundedOneInput;
 import org.apache.flink.streaming.api.operators.ProcessOperator;
 import org.apache.flink.streaming.api.operators.StreamSink;
+import org.apache.flink.streaming.api.watermark.Watermark;
 
 /**
  * Operator for {@link StreamSink}.
@@ -48,6 +49,11 @@ public class StreamWriteOperator<I>
 
   void setOperatorEventGateway(OperatorEventGateway operatorEventGateway) {
     sinkFunction.setOperatorEventGateway(operatorEventGateway);
+  }
+
+  @Override
+  public void processWatermark(Watermark mark) throws Exception {
+    sinkFunction.processWatermark(mark);
   }
 
   @Override

@@ -239,22 +239,29 @@
       <version>2.5</version>
     </dependency>
     <!-- Hive -->
+
     <dependency>
       <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-exec</artifactId>
+      <artifactId>hive-metastore</artifactId>
       <version>${hive.version}</version>
-      <classifier>${hive.exec.classifier}</classifier>
-      <exclusions>
-        <exclusion>
-          <groupId>javax.mail</groupId>
-          <artifactId>mail</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.eclipse.jetty.aggregate</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
+
+<!--    <dependency>-->
+<!--      <groupId>${hive.groupid}</groupId>-->
+<!--      <artifactId>hive-exec</artifactId>-->
+<!--      <version>${hive.version}</version>-->
+<!--      <classifier>${hive.exec.classifier}</classifier>-->
+<!--      <exclusions>-->
+<!--        <exclusion>-->
+<!--          <groupId>javax.mail</groupId>-->
+<!--          <artifactId>mail</artifactId>-->
+<!--        </exclusion>-->
+<!--        <exclusion>-->
+<!--          <groupId>org.eclipse.jetty.aggregate</groupId>-->
+<!--          <artifactId>*</artifactId>-->
+<!--        </exclusion>-->
+<!--      </exclusions>-->
+<!--    </dependency>-->
 
     <!-- Test dependencies -->
 

@@ -18,8 +18,10 @@
 
 package org.apache.hudi.sink;
 
+import org.apache.flink.core.fs.Path;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.commitpolicy.HiveTableMetaStore;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -29,6 +31,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.sink.event.BatchWriteSuccessEvent;
 import org.apache.hudi.sink.event.InitWriterEvent;
 import org.apache.hudi.sink.event.ResponseEvent;
@@ -48,18 +51,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.function.Predicate;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import static org.apache.flink.table.utils.PartitionPathUtils.extractPartitionSpecFromPath;
 import static org.apache.hudi.util.StreamerUtil.initTableIfNotExists;
 
 /**
@@ -138,6 +140,16 @@ public class StreamWriteOperatorCoordinator
   private transient TableState tableState;
 
   /**
+   * adapter the pattern in bilibili warehouse in hdfs path .../log_date=20210629/log_hour=00
+   */
+  private Pattern pattern = Pattern.compile(".*(log_date=)(\\d*)(/)?(log_hour=)?(\\d*)?");
+
+  /**
+   * Used to store each commit partition path.
+   */
+  private HashSet<String> partitionCollect = new HashSet<>();
+
+  /**
    * Constructs a StreamingSinkOperatorCoordinator.
    *
    * @param conf    The config options
@@ -214,9 +226,6 @@ public class StreamWriteOperatorCoordinator
             startInstant();
 
             sendEventToWriter(context, true);
-
-            // sync Hive if is enabled
-            syncHiveIfEnabled();
           }
         }, "commits the instant %s", this.instant
     );
@@ -271,6 +280,7 @@ public class StreamWriteOperatorCoordinator
 
   private void syncHiveIfEnabled() {
     if (conf.getBoolean(FlinkOptions.HIVE_SYNC_ENABLED)) {
+      LOG.info("syncHiveIfEnabled begin");
       this.hiveSyncExecutor.execute(this::syncHive, "sync hive metadata for instant %s", this.instant);
     }
   }
@@ -279,7 +289,9 @@ public class StreamWriteOperatorCoordinator
    * Sync hoodie table metadata to Hive metastore.
    */
   public void syncHive() {
-    hiveSyncContext.hiveSyncTool().syncHoodieTable();
+    HiveSyncTool hiveSyncTool = hiveSyncContext.hiveSyncTool();
+    LOG.info("hiveSyncTool client path " + hiveSyncTool.getHoodieHiveClient().getBasePath());
+    hiveSyncTool.syncHoodieTable();
   }
 
   private void startInstant() {
@@ -406,8 +418,80 @@ public class StreamWriteOperatorCoordinator
       reset();
       return false;
     }
+
+    Optional<BatchWriteSuccessEvent> min = Arrays.stream(eventBuffer).filter(Objects::nonNull).min((o1, o2) -> (int) (o1.getWatermark() - o2.getWatermark()));
     doCommit(writeResults);
+    if (!min.isPresent()) {
+      return true;
+    }
+    commitToHms(writeResults, min.get().getWatermark());
     return true;
+  }
+
+  public void commitToHms(List<WriteStatus> writeResults, long watermark) {
+    List<String> partitionPath = writeResults.stream().map(WriteStatus::getPartitionPath).collect(Collectors.toList());
+    partitionCollect.addAll(partitionPath);
+    List<String> needCommit = new ArrayList<>();
+    partitionCollect.forEach(partitionTime -> {
+      Matcher matcher = pattern.matcher(partitionTime);
+      if (partitionTime.contains("log_hour")) {
+        if (matcher.find()) {
+          String partTime = matcher.group(2) + matcher.group(5);
+          if (needCommit(true, watermark, partTime)) {
+            needCommit.add(matcher.group(1) + matcher.group(2) + matcher.group(3) + matcher.group(4) + matcher.group(5));
+          }
+        }
+      }
+
+      if (!partitionTime.contains("log_hour")) {
+        if (matcher.find()) {
+          String partTime = matcher.group(2);
+          if (needCommit(false, watermark, partTime)) {
+            needCommit.add(matcher.group(1) + matcher.group(2));
+          }
+        }
+      }
+    });
+
+    try {
+      HiveTableMetaStore metaStore = HiveTableMetaStore.HiveTableMetaStoreFactory.
+              getHiveTableMetaStore(conf.getString(FlinkOptions.HIVE_SYNC_DB), conf.getString(FlinkOptions.HIVE_SYNC_TABLE));
+      for (String commitPartition: needCommit) {
+        LOG.info("need commits partition {}", commitPartition);
+        LinkedHashMap<String, String> partSpec = extractPartitionSpecFromPath(new Path(commitPartition));
+        Path path = new Path(conf.getString(FlinkOptions.PATH) + "/" + commitPartition);
+        metaStore.createOrAlterPartition(partSpec, path);
+        partitionCollect.remove(commitPartition + "/");
+      }
+    } catch (Exception e) {
+      LOG.warn("Failed to commit partition {}", partitionCollect, e);
+    }
+  }
+
+  private boolean needCommit(boolean hourPartition, long lowWatermark, String partitionTime) {
+    try {
+      if (hourPartition) {
+        String watermark = transformToHour(lowWatermark);
+        return Integer.parseInt(watermark) > Integer.parseInt(partitionTime);
+      } else {
+        String watermark = transformToDay(lowWatermark);
+        return Integer.parseInt(watermark) > Integer.parseInt(partitionTime);
+      }
+    } catch (ParseException p) {
+      return false;
+    }
+  }
+
+  public static String transformToHour(long time) throws ParseException {
+    SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMddHH");
+    Date date = sdf.parse(sdf.format(time));
+    return sdf.format(date);
+  }
+
+  public static String transformToDay(long time) throws ParseException {
+    SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd");
+    Date date = sdf.parse(sdf.format(time));
+    return sdf.format(date);
   }
 
   /** Performs the actual commit action. */
@@ -428,8 +512,7 @@ public class StreamWriteOperatorCoordinator
       final Map<String, List<String>> partitionToReplacedFileIds = tableState.isOverwrite
           ? writeClient.getPartitionToReplacedFileIds(tableState.operationType, writeResults)
           : Collections.emptyMap();
-      boolean success = writeClient.commit(this.instant, writeResults, Option.of(checkpointCommitMetadata),
-          tableState.commitAction, partitionToReplacedFileIds);
+      boolean success = writeClient.commit(this.instant, writeResults, Option.of(checkpointCommitMetadata), tableState.commitAction, partitionToReplacedFileIds);
       if (success) {
         reset();
         LOG.info("Commit instant [{}] success!", this.instant);

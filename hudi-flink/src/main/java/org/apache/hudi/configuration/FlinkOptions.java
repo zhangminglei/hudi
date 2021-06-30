@@ -416,6 +416,19 @@ public class FlinkOptions {
   // ------------------------------------------------------------------------
   //  Hive Sync Options
   // ------------------------------------------------------------------------
+
+  public static final ConfigOption<String> HIVE_ODS_DATABASE = ConfigOptions
+          .key("hive_sync.ods_database")
+          .stringType()
+          .defaultValue("odsdatabase")
+          .withDescription("ods database name, used to judge partition is completed.");
+
+  public static final ConfigOption<String> HIVE_ODS_TABLENAME = ConfigOptions
+          .key("hive_sync.ods_tablename")
+          .stringType()
+          .defaultValue("odstablename")
+          .withDescription("ods table name, used to judge partition is completed.");
+
   public static final ConfigOption<Boolean> HIVE_SYNC_ENABLED = ConfigOptions
       .key("hive_sync.enable")
       .booleanType()

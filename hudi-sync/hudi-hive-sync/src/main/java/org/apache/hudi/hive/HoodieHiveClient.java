@@ -21,29 +21,33 @@ package org.apache.hudi.hive;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+
+import org.apache.hadoop.hive.metastore.RetryingMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.ql.Driver;
-import org.apache.hadoop.security.UserGroupInformation;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.fs.StorageSchemes;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.HoodieTimer;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.hive.util.HiveSchemaUtil;
-
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.processors.CommandProcessorResponse;
 import org.apache.hadoop.hive.ql.session.SessionState;
+
+import org.apache.hadoop.security.UserGroupInformation;
+import org.apache.hudi.hive.util.HiveSchemaUtil;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.StorageSchemes;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
+
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -51,12 +55,6 @@ import org.apache.parquet.schema.MessageType;
 import org.apache.thrift.TException;
 
 import java.io.IOException;
-import java.sql.Connection;
-import java.sql.DatabaseMetaData;
-import java.sql.DriverManager;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -66,17 +64,17 @@ import java.util.stream.Collectors;
 
 public class HoodieHiveClient extends AbstractSyncHoodieClient {
 
+  private static final Logger LOG = LogManager.getLogger(HoodieHiveClient.class);
+
   private static final String HOODIE_LAST_COMMIT_TIME_SYNC = "last_commit_time_sync";
   private static final String HIVE_ESCAPE_CHARACTER = HiveSchemaUtil.HIVE_ESCAPE_CHARACTER;
 
-  private static final Logger LOG = LogManager.getLogger(HoodieHiveClient.class);
   private final PartitionValueExtractor partitionValueExtractor;
   private IMetaStoreClient client;
   private SessionState sessionState;
   private Driver hiveDriver;
   private HiveSyncConfig syncConfig;
   private FileSystem fs;
-  private Connection connection;
   private HoodieTimeline activeTimeline;
   private HiveConf configuration;
 
@@ -84,24 +82,15 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     super(cfg.basePath, cfg.assumeDatePartitioning, cfg.useFileListingFromMetadata, cfg.verifyMetadataFileListing, fs);
     this.syncConfig = cfg;
     this.fs = fs;
-
     this.configuration = configuration;
-    // Support both JDBC and metastore based implementations for backwards compatiblity. Future users should
-    // disable jdbc and depend on metastore client for all hive registrations
-    if (cfg.useJdbc) {
-      LOG.info("Creating hive connection " + cfg.jdbcUrl);
-      createHiveConnection();
-    }
     try {
       HoodieTimer timer = new HoodieTimer().startTimer();
-      this.sessionState = new SessionState(configuration,
-              UserGroupInformation.getCurrentUser().getShortUserName());
+      this.sessionState = new SessionState(configuration, UserGroupInformation.getCurrentUser().getShortUserName());
       SessionState.start(this.sessionState);
       this.sessionState.setCurrentDatabase(syncConfig.databaseName);
       hiveDriver = new org.apache.hadoop.hive.ql.Driver(configuration);
       this.client = Hive.get(configuration).getMSC();
-      LOG.info(String.format("Time taken to start SessionState and create Driver and client: "
-              + "%s ms", (timer.endTimer())));
+      LOG.info(String.format("Time taken to start SessionState and create Driver and client: " + "%s ms", (timer.endTimer())));
     } catch (MetaException | HiveException | IOException e) {
       if (this.sessionState != null) {
         try {
@@ -119,6 +108,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     try {
       this.partitionValueExtractor =
           (PartitionValueExtractor) Class.forName(cfg.partitionValueExtractorClass).newInstance();
+      LOG.info("partitionValueExtractor class is " + partitionValueExtractor.getClass().getCanonicalName());
     } catch (Exception e) {
       throw new HoodieHiveSyncException(
           "Failed to initialize PartitionValueExtractor class " + cfg.partitionValueExtractorClass, e);
@@ -317,28 +307,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
    */
   @Override
   public Map<String, String> getTableSchema(String tableName) {
-    if (syncConfig.useJdbc) {
-      if (!doesTableExist(tableName)) {
-        throw new IllegalArgumentException(
-            "Failed to get schema for table " + tableName + " does not exist");
-      }
-      Map<String, String> schema = new HashMap<>();
-      ResultSet result = null;
-      try {
-        DatabaseMetaData databaseMetaData = connection.getMetaData();
-        result = databaseMetaData.getColumns(null, syncConfig.databaseName, tableName, null);
-        while (result.next()) {
-          TYPE_CONVERTOR.doConvert(result, schema);
-        }
-        return schema;
-      } catch (SQLException e) {
-        throw new HoodieHiveSyncException("Failed to get table schema for " + tableName, e);
-      } finally {
-        closeQuietly(result, null);
-      }
-    } else {
-      return getTableSchemaUsingMetastoreClient(tableName);
-    }
+    return getTableSchemaUsingMetastoreClient(tableName);
   }
 
   public Map<String, String> getTableSchemaUsingMetastoreClient(String tableName) {
@@ -398,20 +367,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
    * @param s SQL to execute
    */
   public void updateHiveSQL(String s) {
-    if (syncConfig.useJdbc) {
-      Statement stmt = null;
-      try {
-        stmt = connection.createStatement();
-        LOG.info("Executing SQL " + s);
-        stmt.execute(s);
-      } catch (SQLException e) {
-        throw new HoodieHiveSyncException("Failed in executing SQL " + s, e);
-      } finally {
-        closeQuietly(null, stmt);
-      }
-    } else {
-      updateHiveSQLUsingHiveDriver(s);
-    }
+    updateHiveSQLUsingHiveDriver(s);
   }
 
   /**
@@ -441,38 +397,6 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     return responses;
   }
 
-  private void createHiveConnection() {
-    if (connection == null) {
-      try {
-        Class.forName("org.apache.hive.jdbc.HiveDriver");
-      } catch (ClassNotFoundException e) {
-        LOG.error("Unable to load Hive driver class", e);
-        return;
-      }
-
-      try {
-        this.connection = DriverManager.getConnection(syncConfig.jdbcUrl, syncConfig.hiveUser, syncConfig.hivePass);
-        LOG.info("Successfully established Hive connection to  " + syncConfig.jdbcUrl);
-      } catch (SQLException e) {
-        throw new HoodieHiveSyncException("Cannot create hive connection " + getHiveJdbcUrlWithDefaultDBName(), e);
-      }
-    }
-  }
-
-  private String getHiveJdbcUrlWithDefaultDBName() {
-    String hiveJdbcUrl = syncConfig.jdbcUrl;
-    String urlAppend = null;
-    // If the hive url contains addition properties like ;transportMode=http;httpPath=hs2
-    if (hiveJdbcUrl.contains(";")) {
-      urlAppend = hiveJdbcUrl.substring(hiveJdbcUrl.indexOf(";"));
-      hiveJdbcUrl = hiveJdbcUrl.substring(0, hiveJdbcUrl.indexOf(";"));
-    }
-    if (!hiveJdbcUrl.endsWith("/")) {
-      hiveJdbcUrl = hiveJdbcUrl + "/";
-    }
-    return hiveJdbcUrl + (urlAppend == null ? "" : urlAppend);
-  }
-
   @Override
   public Option<String> getLastCommitTimeSynced(String tableName) {
     // Get the last commit time from the TBLproperties
@@ -485,21 +409,10 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
   }
 
   public void close() {
-    try {
-      if (connection != null) {
-        connection.close();
-      }
-      if (client != null) {
-        Hive.closeCurrent();
-        client = null;
-      }
-    } catch (SQLException e) {
-      LOG.error("Could not close connection ", e);
+    if (client != null) {
+      Hive.closeCurrent();
+      client = null;
     }
-  }
-
-  List<String> getAllTables(String db) throws Exception {
-    return client.getAllTables(db);
   }
 
   @Override

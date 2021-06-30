@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.event;
 
+import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.util.ValidationUtils;
 
@@ -37,6 +38,9 @@ public class BatchWriteSuccessEvent implements OperatorEvent {
   private final int taskID;
   private String instantTime;
   private boolean isLastBatch;
+
+  private long watermark;
+
   /**
    * Flag saying whether the event comes from the end of input, e.g. the source
    * is bounded, there are two cases in which this flag should be set to true:
@@ -61,12 +65,14 @@ public class BatchWriteSuccessEvent implements OperatorEvent {
       String instantTime,
       List<WriteStatus> writeStatuses,
       boolean isLastBatch,
-      boolean isEndInput) {
+      boolean isEndInput,
+      long watermark) {
     this.taskID = taskID;
     this.instantTime = instantTime;
     this.writeStatuses = new ArrayList<>(writeStatuses);
     this.isLastBatch = isLastBatch;
     this.isEndInput = isEndInput;
+    this.watermark = watermark;
   }
 
   /**
@@ -94,6 +100,10 @@ public class BatchWriteSuccessEvent implements OperatorEvent {
 
   public boolean isEndInput() {
     return isEndInput;
+  }
+
+  public long getWatermark() {
+    return watermark;
   }
 
   /**
@@ -130,12 +140,13 @@ public class BatchWriteSuccessEvent implements OperatorEvent {
     private String instantTime;
     private boolean isLastBatch = false;
     private boolean isEndInput = false;
+    private long watermark;
 
     public BatchWriteSuccessEvent build() {
       Objects.requireNonNull(taskID);
       Objects.requireNonNull(instantTime);
       Objects.requireNonNull(writeStatus);
-      return new BatchWriteSuccessEvent(taskID, instantTime, writeStatus, isLastBatch, isEndInput);
+      return new BatchWriteSuccessEvent(taskID, instantTime, writeStatus, isLastBatch, isEndInput, watermark);
     }
 
     public Builder taskID(int taskID) {
@@ -160,6 +171,11 @@ public class BatchWriteSuccessEvent implements OperatorEvent {
 
     public Builder isEndInput(boolean isEndInput) {
       this.isEndInput = isEndInput;
+      return this;
+    }
+
+    public Builder watermark(Watermark watermark) {
+      this.watermark = watermark.getTimestamp();
       return this;
     }
   }
