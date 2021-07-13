@@ -197,6 +197,7 @@ public class WriteStatus implements Serializable {
   @Override
   public String toString() {
     final StringBuilder sb = new StringBuilder("WriteStatus {");
+    sb.append("partitionPath=").append(partitionPath);
     sb.append("fileId=").append(fileId);
     sb.append(", globalError='").append(globalError).append('\'');
     sb.append(", hasErrors='").append(hasErrors()).append('\'');

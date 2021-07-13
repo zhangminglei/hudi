@@ -18,6 +18,8 @@
 
 package org.apache.hudi.sink;
 
+import org.apache.flink.streaming.api.functions.ProcessFunction;
+import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieKey;
@@ -100,8 +102,8 @@ import java.util.stream.Collectors;
  * @param <I> Type of the input record
  * @see StreamWriteOperatorCoordinator
  */
-public class StreamWriteFunction<K, I, O>
-    extends KeyedProcessFunction<K, I, O>
+public class StreamWriteFunction<I, O>
+    extends ProcessFunction<I, O>
     implements CheckpointedFunction {
 
   private static final long serialVersionUID = 1L;
@@ -176,6 +178,8 @@ public class StreamWriteFunction<K, I, O>
    */
   private List<WriteStatus> writeStatuses;
 
+  private Watermark watermark;
+
   /**
    * Constructs a StreamingSinkFunction.
    *
@@ -228,8 +232,12 @@ public class StreamWriteFunction<K, I, O>
   }
 
   @Override
-  public void processElement(I value, KeyedProcessFunction<K, I, O>.Context ctx, Collector<O> out) {
+  public void processElement(I value, Context ctx, Collector<O> out) {
     bufferRecord((HoodieRecord<?>) value);
+  }
+
+  public void processWatermark(Watermark mark) throws Exception {
+    watermark = mark;
   }
 
   @Override
@@ -354,6 +362,7 @@ public class StreamWriteFunction<K, I, O>
   }
 
   public void handleOperatorEvent(OperatorEvent event) {
+    LOG.info("event is " + event.toString());
     ValidationUtils.checkArgument(event instanceof CommitAckEvent,
         "The write function can only handle CommitAckEvent");
     this.confirming = false;
@@ -567,8 +576,10 @@ public class StreamWriteFunction<K, I, O>
         && this.buckets.values().stream().anyMatch(bucket -> bucket.records.size() > 0);
   }
 
-  private String instantToWrite(boolean hasData) {
+  private String instantToWrite(String comes, boolean hasData) {
     String instant = this.writeClient.getLastPendingInstant(this.actionType);
+    LOG.info("instant is " + instant + ", comes from " + comes + ", and confirming is " + confirming +
+            "current instant is " + currentInstant);
     // if exactly-once semantics turns on,
     // waits for the checkpoint notification until the checkpoint timeout threshold hits.
     long waitingTime = 0L;
@@ -579,6 +590,7 @@ public class StreamWriteFunction<K, I, O>
       // 1. there is no inflight instant
       // 2. the inflight instant does not change and the checkpoint has buffering data
       if (instant == null || (instant.equals(this.currentInstant) && hasData)) {
+        LOG.info("hello not happen");
         // sleep for a while
         try {
           if (waitingTime > ckpTimeout) {
@@ -592,6 +604,7 @@ public class StreamWriteFunction<K, I, O>
         // refresh the inflight instant
         instant = this.writeClient.getLastPendingInstant(this.actionType);
       } else {
+        LOG.info("confirming is false");
         // the inflight instant changed, which means the last instant was committed
         // successfully.
         confirming = false;
@@ -602,7 +615,7 @@ public class StreamWriteFunction<K, I, O>
 
   @SuppressWarnings("unchecked, rawtypes")
   private boolean flushBucket(DataBucket bucket) {
-    String instant = instantToWrite(true);
+    String instant = instantToWrite("flush bucket", true);
 
     if (instant == null) {
       // in case there are empty checkpoints that has no input data
@@ -624,6 +637,7 @@ public class StreamWriteFunction<K, I, O>
         .writeStatus(writeStatus)
         .lastBatch(false)
         .endInput(false)
+        .watermark(watermark)
         .build();
 
     this.eventGateway.sendEventToCoordinator(event);
@@ -633,7 +647,7 @@ public class StreamWriteFunction<K, I, O>
 
   @SuppressWarnings("unchecked, rawtypes")
   private void flushRemaining(boolean endInput) {
-    this.currentInstant = instantToWrite(hasData());
+    this.currentInstant = instantToWrite("checkpoint" ,hasData());
     if (this.currentInstant == null) {
       // in case there are empty checkpoints that has no input data
       throw new HoodieException("No inflight instant when flushing data!");
@@ -665,6 +679,7 @@ public class StreamWriteFunction<K, I, O>
         .instantTime(currentInstant)
         .writeStatus(writeStatus)
         .lastBatch(true)
+        .watermark(watermark)
         .endInput(endInput)
         .build();
 

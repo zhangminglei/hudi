@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.hudi.sink.bootstrap.IndexRecord;
 import org.apache.hudi.sink.utils.PayloadCreation;
 import org.apache.hudi.table.action.commit.BucketInfo;
@@ -49,6 +50,8 @@ import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.table.runtime.util.StateTtlConfigUtil;
 import org.apache.flink.util.Collector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Objects;
 
@@ -70,6 +73,8 @@ import java.util.Objects;
 public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     extends KeyedProcessFunction<K, I, O>
     implements CheckpointedFunction, CheckpointListener {
+
+  private static final Logger LOG = LoggerFactory.getLogger(BucketAssignFunction.class);
 
   private BucketAssignOperator.Context context;
 
@@ -137,6 +142,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
         HoodieTableType.valueOf(conf.getString(FlinkOptions.TABLE_TYPE)),
         context,
         writeConfig);
+    LOG.info("bucket assigner is " + bucketAssigner + ", hadooopconf is " + hadoopConf.toString());
     this.payloadCreation = PayloadCreation.instance(this.conf);
   }
 

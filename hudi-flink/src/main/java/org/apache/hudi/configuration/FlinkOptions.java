@@ -523,6 +523,12 @@ public class FlinkOptions {
       .withDescription("INT64 with original type TIMESTAMP_MICROS is converted to hive timestamp type.\n"
           + "Disabled by default for backward compatibility.");
 
+  public static final ConfigOption<Boolean> HIVE_SYNC_FULL_DATA = ConfigOptions
+          .key("hive_sync.full_data")
+          .booleanType()
+          .defaultValue(true)
+          .withDescription("sync hms needs full data, default is true.");
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------

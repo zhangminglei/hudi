@@ -18,8 +18,11 @@
 
 package org.apache.hudi.sink;
 
+import org.apache.flink.core.fs.Path;
+import org.apache.flink.table.utils.PartitionPathUtils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.commitpolicy.HiveTableMetaStore;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -47,19 +50,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.flink.table.utils.PartitionPathUtils.extractPartitionSpecFromPath;
 import static org.apache.hudi.util.StreamerUtil.initTableIfNotExists;
 
 /**
@@ -133,6 +132,17 @@ public class StreamWriteOperatorCoordinator
   private transient TableState tableState;
 
   /**
+   * Used to store each commit partition path.
+   */
+  private HashSet<String> partitionCollect = new HashSet<>();
+
+  /**
+   * Used to store partition field.
+   */
+  private List<String> partitionField = new ArrayList<>();
+
+
+  /**
    * Constructs a StreamingSinkOperatorCoordinator.
    *
    * @param conf    The config options
@@ -161,6 +171,7 @@ public class StreamWriteOperatorCoordinator
     if (conf.getBoolean(FlinkOptions.HIVE_SYNC_ENABLED)) {
       initHiveSync();
     }
+    partitionField.addAll(Arrays.asList(conf.getString(FlinkOptions.HIVE_SYNC_PARTITION_FIELDS).split(",")));
   }
 
   @Override
@@ -260,6 +271,9 @@ public class StreamWriteOperatorCoordinator
     this.hiveSyncContext = HiveSyncContext.create(conf);
   }
 
+  /**
+   * We dont use inside sync. DON't remote it , soon use it for increment read.
+   */
   private void syncHiveIfEnabled() {
     if (conf.getBoolean(FlinkOptions.HIVE_SYNC_ENABLED)) {
       this.hiveSyncExecutor.execute(this::syncHive, "sync hive metadata for instant %s", this.instant);
@@ -400,9 +414,76 @@ public class StreamWriteOperatorCoordinator
       sendCommitAckEvents();
       return false;
     }
+    Optional<WriteMetadataEvent> min = Arrays.stream(eventBuffer).filter(Objects::nonNull).min((o1, o2) -> (int) (o1.getWatermark() - o2.getWatermark()));
     doCommit(instant, writeResults);
+    if (!min.isPresent()) {
+      return true;
+    }
+    commitToHms(writeResults, min.get().getWatermark());
     return true;
   }
+
+  public void commitToHms(List<WriteStatus> writeResults, long watermark) {
+    List<String> partitionPath = writeResults.stream().map(WriteStatus::getPartitionPath).map(x -> x.substring(0, x.lastIndexOf('/'))).collect(Collectors.toList());
+    partitionCollect.addAll(partitionPath);
+    List<String> needCommit = new ArrayList<>();
+    partitionCollect.forEach(partitionTime -> {
+      List<String> list = PartitionPathUtils.extractPartitionValues(new Path(partitionTime));
+      if (list.size() > 1) {
+        String partTime = list.get(0) + list.get(1);
+        if (needCommit(true, watermark, partTime, conf.getBoolean(FlinkOptions.HIVE_SYNC_FULL_DATA))) {
+          needCommit.add(partitionField.get(0) + "=" + list.get(0) + "/" + partitionField.get(1) + "=" + list.get(1));
+        }
+      } else {
+        String partTime = list.get(0);
+        if (needCommit(false, watermark, partTime, conf.getBoolean(FlinkOptions.HIVE_SYNC_FULL_DATA))) {
+          needCommit.add(partitionField.get(0) + "=" + list.get(0));
+        }
+      }
+    });
+
+    try {
+      HiveTableMetaStore metaStore = HiveTableMetaStore.HiveTableMetaStoreFactory.
+              getHiveTableMetaStore(conf.getString(FlinkOptions.HIVE_SYNC_DB), conf.getString(FlinkOptions.HIVE_SYNC_TABLE));
+      for (String commitPartition: needCommit) {
+        LinkedHashMap<String, String> partSpec = extractPartitionSpecFromPath(new Path(commitPartition));
+        Path path = new Path(conf.getString(FlinkOptions.PATH) + "/" + commitPartition);
+        metaStore.createOrAlterPartition(partSpec, path);
+        partitionCollect.remove(commitPartition);
+      }
+    } catch (Exception e) {
+      LOG.warn("Failed to commit partition {}", partitionCollect, e);
+    }
+  }
+
+  private boolean needCommit(boolean hourPartition, long lowWatermark, String partitionTime, boolean needFullData) {
+    if (!needFullData)
+      return true;
+    try {
+      if (hourPartition) {
+        return transformToHour(lowWatermark).compareTo(partitionTime) > 0;
+      } else {
+        return transformToDay(lowWatermark).compareTo(partitionTime) > 0;
+      }
+    } catch (ParseException e) {
+      LOG.warn("Failed to parse date", e);
+      return false;
+    }
+  }
+
+  public static String transformToHour(long time) throws ParseException {
+    SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMddHH");
+    Date date = sdf.parse(sdf.format(time));
+    return sdf.format(date);
+  }
+
+  public static String transformToDay(long time) throws ParseException {
+    SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd");
+    Date date = sdf.parse(sdf.format(time));
+    return sdf.format(date);
+  }
+
+
 
   /**
    * Performs the actual commit action.

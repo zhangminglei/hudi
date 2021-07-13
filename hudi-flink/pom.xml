@@ -108,6 +108,8 @@
       <version>${project.version}</version>
     </dependency>
 
+
+
     <!-- Flink -->
     <dependency>
       <groupId>org.apache.flink</groupId>
@@ -254,6 +256,12 @@
           <artifactId>*</artifactId>
         </exclusion>
       </exclusions>
+    </dependency>
+
+    <dependency>
+      <groupId>${hive.groupid}</groupId>
+      <artifactId>hive-metastore</artifactId>
+      <version>${hive.version}</version>
     </dependency>
 
     <!-- Test dependencies -->

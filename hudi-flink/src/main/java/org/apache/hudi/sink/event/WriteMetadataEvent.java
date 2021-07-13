@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.event;
 
+import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.util.ValidationUtils;
 
@@ -37,6 +38,8 @@ public class WriteMetadataEvent implements OperatorEvent {
   private int taskID;
   private String instantTime;
   private boolean lastBatch;
+
+  private long watermark;
 
   /**
    * Flag saying whether the event comes from the end of input, e.g. the source
@@ -69,13 +72,15 @@ public class WriteMetadataEvent implements OperatorEvent {
       List<WriteStatus> writeStatuses,
       boolean lastBatch,
       boolean endInput,
-      boolean bootstrap) {
+      boolean bootstrap,
+      long watermark) {
     this.taskID = taskID;
     this.instantTime = instantTime;
     this.writeStatuses = new ArrayList<>(writeStatuses);
     this.lastBatch = lastBatch;
     this.endInput = endInput;
     this.bootstrap = bootstrap;
+    this.watermark = watermark;
   }
 
   // default constructor for efficient serialization
@@ -90,6 +95,10 @@ public class WriteMetadataEvent implements OperatorEvent {
 
   public List<WriteStatus> getWriteStatuses() {
     return writeStatuses;
+  }
+
+  public long getWatermark() {
+    return watermark;
   }
 
   public void setWriteStatuses(List<WriteStatus> writeStatuses) {
@@ -136,6 +145,8 @@ public class WriteMetadataEvent implements OperatorEvent {
     this.lastBatch = lastBatch;
   }
 
+
+
   /**
    * Merges this event with given {@link WriteMetadataEvent} {@code other}.
    *
@@ -173,12 +184,13 @@ public class WriteMetadataEvent implements OperatorEvent {
     private boolean lastBatch = false;
     private boolean endInput = false;
     private boolean bootstrap = false;
+    private long watermark;
 
     public WriteMetadataEvent build() {
       Objects.requireNonNull(taskID);
       Objects.requireNonNull(instantTime);
       Objects.requireNonNull(writeStatus);
-      return new WriteMetadataEvent(taskID, instantTime, writeStatus, lastBatch, endInput, bootstrap);
+      return new WriteMetadataEvent(taskID, instantTime, writeStatus, lastBatch, endInput, bootstrap, watermark);
     }
 
     public Builder taskID(int taskID) {
@@ -210,5 +222,11 @@ public class WriteMetadataEvent implements OperatorEvent {
       this.bootstrap = bootstrap;
       return this;
     }
+
+    public Builder watermark(Watermark watermark) {
+      this.watermark = watermark.getTimestamp();
+      return this;
+    }
+
   }
 }

@@ -537,6 +537,22 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   public String getLastPendingInstant(String actionType) {
     HoodieTimeline unCompletedTimeline = FlinkClientUtil.createMetaClient(basePath)
         .getCommitsTimeline().filterInflightsAndRequested();
+
+    /**
+     * unCompletedTimeline is [==>20210710234021__commit__INFLIGHT]
+     */
+      LOG.info("unCompletedTimeline is " + unCompletedTimeline);
+
+    Object[] objects = unCompletedTimeline.getInstants().toArray();
+    for (int i = 0 ;i<objects.length;i++) {
+      /**
+       * HoodieFlinkWriteClient  - action is commit
+       */
+      LOG.info("action is " + ((HoodieInstant)objects[i]).getAction());
+    }
+
+    LOG.info("action type is " + actionType);
+
     return unCompletedTimeline.getInstants()
         .filter(x -> x.getAction().equals(actionType))
         .map(HoodieInstant::getTimestamp)
